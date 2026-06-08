@@ -1,0 +1,32 @@
+# Maven build output
+**/target/
+
+# IntelliJ IDEA
+**/.idea/
+**/*.iml
+**/*.iws
+**/*.ipr
+.idea/
+
+# Spring Boot application properties (sensitive config)
+**/src/main/resources/application.properties
+**/src/main/resources/application-dev.properties
+**/src/main/resources/application-prod.properties
+
+# Keep the example file
+!**/src/main/resources/application.properties.example
+
+# Logs
+**/*.log
+**/logs/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Docker
+docker-compose.override.yml
+
+# Environment files
+**/.env
+.env
