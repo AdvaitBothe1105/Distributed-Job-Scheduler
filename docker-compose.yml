@@ -1,6 +1,9 @@
 version: '3.8'
 
 services:
+
+  # ─── Infrastructure ───────────────────────────────
+
   kafka:
     image: apache/kafka:latest
     container_name: kafka
@@ -10,8 +13,156 @@ services:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
       KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
-      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_LOG_DIRS: /tmp/kraft-combined-logs
+    networks:
+      - job-scheduler-network
+
+  mysql-auth:
+    image: mysql:8.0
+    container_name: mysql-auth
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${AUTH_DB_NAME}
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql-auth-data:/var/lib/mysql
+    networks:
+      - job-scheduler-network
+
+  mysql-jobs:
+    image: mysql:8.0
+    container_name: mysql-jobs
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${JOB_DB_NAME}
+    ports:
+      - "3308:3306"
+    volumes:
+      - mysql-jobs-data:/var/lib/mysql
+    networks:
+      - job-scheduler-network
+
+  # ─── Services ─────────────────────────────────────
+
+  eureka-server:
+    build: ./eureka-server
+    container_name: eureka-server
+    ports:
+      - "8761:8761"
+    networks:
+      - job-scheduler-network
+
+  auth-service:
+    build: ./auth-service
+    container_name: auth-service
+    ports:
+      - "8081:8081"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql-auth:3306/${AUTH_DB_NAME}
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      APP_JWT_SECRET: sUuyUwdBqmoLxpVC9cTHONE63oIkBPKPgxQ40BipXio
+      APP_JWT_EXPIRATION: 86400000
+    depends_on:
+      - mysql-auth
+      - eureka-server
+    networks:
+      - job-scheduler-network
+
+  job-service:
+    build: ./job-service
+    container_name: job-service
+    ports:
+      - "8082:8082"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql-jobs:3306/${JOB_DB_NAME}
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      APP_JWT_SECRET: sUuyUwdBqmoLxpVC9cTHONE63oIkBPKPgxQ40BipXio
+    depends_on:
+      - mysql-jobs
+      - eureka-server
+      - kafka
+    networks:
+      - job-scheduler-network
+
+  worker-service:
+    build: ./worker-service
+    container_name: worker-service
+    ports:
+      - "8084:8084"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql-jobs:3306/${JOB_DB_NAME}
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    depends_on:
+      - mysql-jobs
+      - eureka-server
+      - kafka
+    networks:
+      - job-scheduler-network
+
+  admin-service:
+    build: ./admin-service
+    container_name: admin-service
+    ports:
+      - "8083:8083"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql-jobs:3306/${JOB_DB_NAME}
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    depends_on:
+      - mysql-jobs
+      - eureka-server
+      - kafka
+    networks:
+      - job-scheduler-network
+
+  notification-service:
+    build: ./notification-service
+    container_name: notification-service
+    ports:
+      - "8085:8085"
+    environment:
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    depends_on:
+      - eureka-server
+      - kafka
+    networks:
+      - job-scheduler-network
+
+  api-gateway:
+    build: ./api-gateway
+    container_name: api-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+    depends_on:
+      - eureka-server
+      - auth-service
+      - job-service
+      - admin-service
+    networks:
+      - job-scheduler-network
+
+volumes:
+  mysql-auth-data:
+  mysql-jobs-data:
+
+networks:
+  job-scheduler-network:
+    driver: bridge
