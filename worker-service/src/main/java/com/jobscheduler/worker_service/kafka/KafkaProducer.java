@@ -18,4 +18,8 @@ public class KafkaProducer {
     public void publishToDLQ(JobEvent jobEvent) {
         kafkaTemplate.send("job-dlq", jobEvent);
     }
+
+    public void publishJobEvent(JobEvent event) {
+        kafkaTemplate.send("job-events", event);
+    }
 }

@@ -48,7 +48,8 @@ public class JobService {
                 job.getJobType().toString(),
                 job.getPayload(),
                 job.getOwnerId(),
-                job.getRetryCount()
+                job.getRetryCount(),
+                ""
         );
         kafkaProducer.publishJob(jobEvent);
 

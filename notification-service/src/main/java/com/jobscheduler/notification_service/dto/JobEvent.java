@@ -1,4 +1,4 @@
-package com.jobscheduler.job_service.dto;
+package com.jobscheduler.notification_service.dto;
 
 public record JobEvent(
         String jobId,

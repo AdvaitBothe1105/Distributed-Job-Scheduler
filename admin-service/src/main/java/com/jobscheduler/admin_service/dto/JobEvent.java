@@ -5,6 +5,7 @@ public record JobEvent(
         String type,
         String payload,
         String ownerId,
-        int retryCount
+        int retryCount,
+        String status
 ) {
 }

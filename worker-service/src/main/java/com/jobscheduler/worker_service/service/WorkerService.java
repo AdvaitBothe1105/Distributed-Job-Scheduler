@@ -51,6 +51,16 @@ public class WorkerService {
             job.setJobStatus(JobStatus.COMPLETED);
             job.setCompletedAt(LocalDateTime.now());
             jobRepo.save(job);
+            kafkaProducer.publishJobEvent(
+                    new JobEvent(
+                            event.jobId(),
+                            event.type(),
+                            event.payload(),
+                            event.ownerId(),
+                            event.retryCount(),
+                            "COMPLETED"          // ← status
+                    )
+            );
 
             // ONLY acknowledge after full success
             ack.acknowledge();
@@ -86,7 +96,8 @@ public class WorkerService {
                     event.type(),
                     event.payload(),
                     event.ownerId(),
-                    event.retryCount() + 1
+                    event.retryCount() + 1,
+                    event.status()
             );
 
             // update DB before republishing
@@ -95,14 +106,37 @@ public class WorkerService {
             jobRepo.save(job);
 
             // republish for retry
-            kafkaProducer.publishJob(retryEvent);
+            kafkaProducer.publishJob(new JobEvent(
+                    event.jobId(),
+                    event.type(),
+                    event.payload(),
+                    event.ownerId(),
+                    event.retryCount() + 1,
+                    ""               // ← not a notification event
+            ));
             log.info("Job {} queued for retry attempt {}",
                     event.jobId(), event.retryCount() + 1);
 
         } else {
             // max retries exceeded — send to DLQ
-            kafkaProducer.publishToDLQ(event);
-
+            kafkaProducer.publishToDLQ(
+                    new JobEvent(
+                            event.jobId(),
+                            event.type(),
+                            event.payload(),
+                            event.ownerId(),
+                            event.retryCount(),
+                            "DLQ"               // ← status
+                    )
+            );
+            kafkaProducer.publishJobEvent(new JobEvent(
+                    event.jobId(),
+                    event.type(),
+                    event.payload(),
+                    event.ownerId(),
+                    event.retryCount(),
+                    "DLQ"               // ← status
+            ));
             job.setJobStatus(JobStatus.DLQ);
             job.setErrorMessage(e.getMessage());
             jobRepo.save(job);

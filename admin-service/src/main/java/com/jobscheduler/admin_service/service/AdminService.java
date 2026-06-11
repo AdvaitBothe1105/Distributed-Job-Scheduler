@@ -46,10 +46,11 @@ public class AdminService {
 
         JobEvent jobEvent = new JobEvent(
                 job.getId(),
-                String.valueOf(job.getJobType()),
+                job.getJobType().toString(),
                 job.getPayload(),
                 job.getOwnerId(),
-                job.getRetryCount()
+                0,
+                ""               // ← not a notification event
         );
 
         kafkaProducer.publishJob(jobEvent);
