@@ -18,6 +18,7 @@ public class JobExecutorService {
                 Thread.sleep(1000);
 
                 System.out.println("EMAIL_BLAST completed: " + jobEvent.jobId());
+//                throw new RuntimeException("Simulated failure for DLQ test");
             }
 
             case REPORT_GEN -> {
